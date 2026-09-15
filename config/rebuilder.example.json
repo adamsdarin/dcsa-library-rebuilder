@@ -1,0 +1,7 @@
+{
+  "archivist_root": "../dcsa-archivist",
+  "librarian_root": "../dcsa-librarian",
+  "protected_libraries": [
+    "<absolute path to the canonical DCSA Library>"
+  ]
+}

@@ -1,0 +1,13 @@
+# Local paths and run state never enter Git.
+config/rebuilder.json
+runs/
+work/
+__pycache__/
+*.pyc
+
+# Source bytes and extractions belong in a library, not this repository.
+*.pdf
+*.docx
+*.xlsx
+*.sqlite
+*.jsonl

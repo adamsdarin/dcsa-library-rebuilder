@@ -1,0 +1,9 @@
+[project]
+name = "dcsa-library-rebuilder"
+version = "0.1.0"
+description = "Single-purpose agent that rebuilds a DCSA Library into an empty destination through Custodian gates"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
