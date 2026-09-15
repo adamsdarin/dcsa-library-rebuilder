@@ -1,0 +1,8 @@
+# Byte-identical copies of Archivist modules: never convert line endings, or
+# workspace_health.py reports false drift after a fresh clone.
+src/library_rebuilder/authority.py -text
+src/library_rebuilder/chunks.py -text
+src/library_rebuilder/common.py -text
+src/library_rebuilder/enrich.py -text
+src/library_rebuilder/indexes.py -text
+src/library_rebuilder/release_contract.py -text

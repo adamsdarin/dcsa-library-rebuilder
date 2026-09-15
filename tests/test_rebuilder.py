@@ -2,30 +2,17 @@ import json
 from pathlib import Path
 import sys
 import tempfile
-import textwrap
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from fixtures import POSITIVE_CASE, make_recipe_dir  # noqa: E402
+from library_rebuilder.build import MARKER  # noqa: E402
 from library_rebuilder.census import census, route  # noqa: E402
-from library_rebuilder.common import sha256_file, write_json  # noqa: E402
-from library_rebuilder.engine import MARKER, load_config, preflight, run, verify  # noqa: E402
+from library_rebuilder.common import read_json, sha256_file, write_json  # noqa: E402
+from library_rebuilder.engine import load_config, preflight, run, verify  # noqa: E402
 from library_rebuilder.recipe import build_recipe  # noqa: E402
-
-REVIEW = {k: "synthetic evidence" for k in ("reviewed_by", "reviewed_utc", "identity", "provenance",
-                                              "extraction", "parity", "taxonomy", "lifecycle")}
-
-FAKE_ENGINE = textwrap.dedent('''
-    import json, sys
-    from pathlib import Path
-    args = sys.argv[1:]
-    if args[:2] == ["regenerate", "--help"]:
-        raise SystemExit(0)
-    recipe = json.loads(Path(args[args.index("--recipe") + 1]).read_text())
-    dest = Path(args[args.index("--destination") + 1])
-    dest.mkdir(parents=True, exist_ok=True)
-    print(json.dumps({"status": "published", "release_id": recipe["release_id"], "destination": str(dest)}))
-''')
 
 
 class Workspace(unittest.TestCase):
@@ -36,34 +23,14 @@ class Workspace(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def config(self, engine=FAKE_ENGINE):
-        archivist, library = self.root / "archivist", self.root / "library"
-        for path in (archivist, library):
-            path.mkdir(exist_ok=True)
-        (archivist / "custodian.py").write_text(engine)
+    def config(self):
+        library = self.root / "library"
+        library.mkdir(exist_ok=True)
         (library / "START_HERE_FOR_ROBOTS.json").write_text("{}")
-        return {"archivist_root": str(archivist), "protected_libraries": [str(library.resolve())]}
+        return {"protected_libraries": [str(library.resolve())]}
 
-    def recipe_dir(self, cases=None, collection="cfr"):
-        directory = self.root / "recipe"
-        directory.mkdir()
-        (directory / "source.pdf").write_bytes(b"%PDF synthetic")
-        (directory / "source.txt").write_text("page one")
-        write_json(directory / "source.pdf.intake.json", {
-            "source_filename": "source.pdf", "source_sha256": sha256_file(directory / "source.pdf"),
-            "source_bytes": (directory / "source.pdf").stat().st_size, "approval_state": "quarantined_unreviewed",
-            "requested_source_uri": "https://example.gov/a.pdf", "resolved_source_uri": "https://example.gov/a.pdf",
-            "retrieved_at": "2026-01-01T00:00:00Z", "mime_type": "application/pdf"})
-        record = {"document_id": "doc-1", "collection_id": collection, "domain": "REGULATIONS",
-                  "authority_tier": 1, "current_status": "current",
-                  "human_source_path": "HUMAN_READABLE_DIRECTORY/REGULATIONS/CFR/a.pdf",
-                  "robot_text_path": "ROBOT_READABLE_DIRECTORY/TEXT/REGULATIONS/CFR/a.txt"}
-        write_json(directory / "intake_plan.json", {"schema_version": "1.0", "items": [{
-            "package": "source.pdf.intake.json", "robot_file": "source.txt",
-            "robot_sha256": sha256_file(directory / "source.txt"), "record": record, "review": REVIEW}]})
-        write_json(directory / "golden_queries.json", {"cases": cases if cases is not None else [
-            {"require_hit": True, "require_locator": True, "expected_document_ids": ["doc-1"]}]})
-        return directory
+    def recipe_dir(self, **kwargs):
+        return make_recipe_dir(self.root / "recipe", doc_ids=["cfr-117"], **kwargs)
 
 
 class CensusTests(Workspace):
@@ -77,7 +44,7 @@ class CensusTests(Workspace):
     def test_census_is_read_only_and_counts(self):
         manifest = self.root / "lib/ROBOT_READABLE_DIRECTORY/MANIFESTS/documents.jsonl"
         manifest.parent.mkdir(parents=True)
-        rows = [{"document_id": "a", "collection_id": "cfr", "source_url": "https://example.gov/a.pdf"},
+        rows = [{"document_id": "a", "collection_id": "cfr", "source_url": "https://example.gov/a.pdf", "source_sha256": "ab" * 32},
                 {"document_id": "b", "collection_id": "cfr"},
                 {"document_id": "c", "collection_id": "doha_decisions"}]
         manifest.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
@@ -88,28 +55,46 @@ class CensusTests(Workspace):
         self.assertEqual(report["by_route"]["reacquire_from_official_url"], 1)
         self.assertEqual(report["by_route"]["retained_bytes_only"], 1)
         self.assertEqual(report["by_route"]["doha_unsupported"], 1)
+        self.assertEqual(report["documents"][0]["recorded_sha256"], "ab" * 32)
         self.assertIsNone(report["source_release_id"])
 
 
 class RecipeTests(Workspace):
     def test_builds_hash_bound_recipe(self):
         directory = self.recipe_dir()
-        recipe = json.loads(build_recipe(directory, "rebuild-1", "CFR test scope").read_text())
-        self.assertEqual(recipe["required_document_ids"], ["doc-1"])
+        recipe = read_json(build_recipe(directory, "rebuild-1", "CFR test scope"))
+        self.assertEqual(recipe["required_document_ids"], ["cfr-117"])
         self.assertEqual(recipe["intake_plan"]["sha256"], sha256_file(directory / "intake_plan.json"))
 
     def test_rejects_negative_only_evaluations(self):
-        directory = self.recipe_dir(cases=[{"require_hit": False}])
+        directory = self.recipe_dir(cases=[{"id": "x", "query": "insider threat", "require_hit": False}])
         with self.assertRaisesRegex(ValueError, "positive"):
             build_recipe(directory, "rebuild-1", "scope")
 
+    def test_rejects_unidentified_cases(self):
+        directory = self.recipe_dir(cases=[dict(POSITIVE_CASE, id=""), POSITIVE_CASE])
+        with self.assertRaisesRegex(ValueError, "uniquely identified"):
+            build_recipe(directory, "rebuild-1", "scope")
+
     def test_rejects_doha(self):
+        directory = self.recipe_dir()
+        plan = read_json(directory / "intake_plan.json")
+        plan["items"][0]["record"]["collection_id"] = "doha_decisions"
+        write_json(directory / "intake_plan.json", plan)
         with self.assertRaisesRegex(ValueError, "DOHA"):
-            build_recipe(self.recipe_dir(collection="doha_decisions"), "rebuild-1", "scope")
+            build_recipe(directory, "rebuild-1", "scope")
+
+    def test_rejects_library_path_outside_directories(self):
+        directory = self.recipe_dir()
+        plan = read_json(directory / "intake_plan.json")
+        plan["items"][0]["record"]["human_source_path"] = "OPERATIONS/cfr.pdf"
+        write_json(directory / "intake_plan.json", plan)
+        with self.assertRaisesRegex(ValueError, "HUMAN_READABLE_DIRECTORY"):
+            build_recipe(directory, "rebuild-1", "scope")
 
     def test_rejects_tampered_extraction(self):
         directory = self.recipe_dir()
-        (directory / "source.txt").write_text("changed after review")
+        (directory / "cfr-117.txt").write_text("changed after review")
         with self.assertRaisesRegex(ValueError, "robot_sha256"):
             build_recipe(directory, "rebuild-1", "scope")
 
@@ -120,13 +105,12 @@ class RecipeTests(Workspace):
 
 
 class EngineTests(Workspace):
-    def test_config_resolves_against_repo_root_and_rejects_placeholder(self):
+    def test_config_needs_no_sibling_repositories(self):
         repo = self.root / "repo"
-        write_json(repo / "config/rebuilder.json", {"archivist_root": "../archivist", "protected_libraries": ["../library"]})
+        write_json(repo / "config/rebuilder.json", {"protected_libraries": ["../library"]})
         config = load_config(repo / "config/rebuilder.json", repo)
-        self.assertEqual(Path(config["archivist_root"]), (self.root / "archivist").resolve())
         self.assertEqual(Path(config["protected_libraries"][0]), (self.root / "library").resolve())
-        write_json(repo / "config/example.json", {"archivist_root": "a", "protected_libraries": ["<absolute path>"]})
+        write_json(repo / "config/example.json", {"protected_libraries": ["<absolute path>"]})
         with self.assertRaisesRegex(ValueError, "protected_libraries"):
             load_config(repo / "config/example.json", repo)
 
@@ -142,35 +126,21 @@ class EngineTests(Workspace):
         dest.mkdir()
         (dest / "stray.txt").write_text("x")
         self.assertIn("not empty", " ".join(preflight(config, dest)["errors"]))
-        fresh = self.root / "fresh"
-        (self.root / ".fresh.regeneration.lock").write_text("4242")
-        self.assertIn("4242", " ".join(preflight(config, fresh)["errors"]))
+        (self.root / ".fresh.rebuild.lock").write_text("4242")
+        self.assertIn("4242", " ".join(preflight(config, self.root / "fresh")["errors"]))
 
-    def test_allows_retry_of_same_recipe_destination(self):
-        config = self.config()
+    def test_allows_retry_of_earlier_rebuild_destination(self):
         dest = self.root / "retry"
-        (dest / MARKER).parent.mkdir(parents=True)
-        (dest / MARKER).write_text("{}")
-        self.assertTrue(preflight(config, dest)["ok"])
+        write_json(dest / MARKER, {})
+        self.assertTrue(preflight(self.config(), dest)["ok"])
 
-    def test_refuses_engine_without_regenerate(self):
-        config = self.config(engine="raise SystemExit(2)\n")
-        self.assertIn("regenerate", " ".join(preflight(config, self.root / "out")["errors"]))
-
-    def test_run_invokes_engine_and_writes_ledger(self):
-        config = self.config()
-        recipe = build_recipe(self.recipe_dir(), "rebuild-1", "scope")
-        entry = run(config, recipe, self.root / "out", self.root / "runs")
-        self.assertTrue(entry["ok"], entry)
-        self.assertEqual(entry["result"]["release_id"], "rebuild-1")
-        self.assertEqual(len(list((self.root / "runs").glob("*.json"))), 1)
-
-    def test_run_does_not_invoke_engine_when_preflight_fails(self):
+    def test_run_never_builds_when_preflight_fails(self):
         config = self.config()
         recipe = build_recipe(self.recipe_dir(), "rebuild-1", "scope")
         entry = run(config, recipe, Path(config["protected_libraries"][0]), self.root / "runs")
         self.assertFalse(entry["ok"])
-        self.assertIsNone(entry["exit_code"])
+        self.assertEqual(entry["status"], "preflight_failed")
+        self.assertNotIn("result", entry)
 
     def test_verify_fails_closed_on_unpublished_destination(self):
         (self.root / "empty").mkdir()

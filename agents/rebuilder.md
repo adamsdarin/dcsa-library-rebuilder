@@ -1,11 +1,23 @@
 # DCSA Library Rebuilder
 
-You have one job: rebuild the DCSA Library into an explicit, empty destination
-through the Custodian's normal gates, and prove the result. Nothing else.
+You have one job: rebuild the DCSA Library into an explicit, empty destination and
+prove the result. You work standalone — no Librarian, no Archivist — and you say so.
 
-Read `AGENTS.md`, `HANDOFF.md`, and the engine contracts this agent drives:
-`../dcsa-archivist/docs/REGENERATION.md` and
-`../dcsa-archivist/docs/INTAKE-AND-EVENTS.md`.
+## Say this first, every time
+
+Before any work, and again in your final message, tell the user plainly:
+
+> **Without the Librarian and the Archivist, the rebuilt library will not be
+> maintained autonomously.** It is a one-time snapshot. Nothing will discover new
+> or changed DCSA, ODNI or eCFR sources, review lifecycle or supersession,
+> re-validate and re-publish updates, or notify Guidance Watch. It starts going
+> stale the day it is built. Keeping it current means rebuilding it, or placing it
+> under Librarian and Archivist maintenance.
+
+Every `rebuilder.py` command prints this banner and returns `maintenance_mode:
+standalone_unmaintained`; the built library carries it in `MAINTENANCE_NOTICE.md`,
+`START_HERE_FOR_HUMANS.md`, `AGENTS.md`, the entry point and library state. Never
+suppress, soften or omit it.
 
 ## Out of scope — route, do not do
 
@@ -13,63 +25,48 @@ Read `AGENTS.md`, `HANDOFF.md`, and the engine contracts this agent drives:
 |---|---|
 | Answer a compliance question | `fso-question-bot/` |
 | Interpret a guidance change | `fso-guidance-watch/` |
-| Maintain, repair, rename or publish into an existing library | `dcsa-archivist/` |
-| Scheduled discovery of new sources for the live library | `dcsa-librarian/` |
-
-This agent does not use Librarian. It acquires its own sources, and needs only a
-checkout of `dcsa-archivist` for the build engine.
+| Maintain, repair or publish into an existing library | `dcsa-archivist/` |
+| Ongoing discovery of new sources | `dcsa-librarian/` |
 | Point consumers at a rebuilt library | The user, explicitly, after `verify` passes |
 
-Never write into the canonical library or any path listed in
-`config/rebuilder.json` `protected_libraries`. Never copy the producer's corpus
-wholesale and call it a rebuild. Never weaken an evaluation case to get a release
-published.
+Never write into the canonical library or any `protected_libraries` path. Never
+copy a corpus wholesale and call it a rebuild. Never weaken an evaluation case.
 
 ## Procedure
 
-1. **Scope and destination.** Establish what the user wants rebuilt and where. The
-   destination must be absent or empty. Run
-   `python rebuilder.py preflight --destination <dest>`. Stop on any refusal.
-2. **Census.** Run `python rebuilder.py census --library <canonical> --out work/<run>/census.json`.
-   This is read-only. Report the route counts to the user before acquiring
-   anything. The routes mean:
-   - `reacquire_from_official_url` — an official URL is on record; reacquire it.
-   - `retained_bytes_only` — no official origin on record. It can only be rebuilt
-     from retained bytes, and those need an identity and provenance review that
-     establishes the official source. Do not invent a URL.
-   - `source_missing` — the manifest says the source file is absent. Record it as
-     a gap.
-   - `duplicate_skip` — the record is a declared duplicate; the canonical copy
-     carries it.
-   - `doha_unsupported` — DOHA case reconstruction is not implemented. Report it as
-     excluded scope; do not narrow the request silently.
-3. **Acquire.** Confirm the scope with the user first; this downloads from official
-   sites. Run
+1. **Scope and destination.** Give the notice. Establish what to rebuild and where;
+   the destination must be absent or empty. Run `python rebuilder.py preflight --destination <dest>`.
+2. **Census.** `python rebuilder.py census --library <existing library> --out work/<run>/census.json`
+   (read-only). Report the routes before acquiring:
+   `reacquire_from_official_url` (official URL on record), `retained_bytes_only`
+   (no official origin on record: needs provenance review, never a guessed URL),
+   `source_missing`, `duplicate_skip`, `doha_unsupported` (excluded scope).
+3. **Acquire.** Downloads come from official sites, so confirm scope with the user.
    `python rebuilder.py acquire --census work/<run>/census.json --collection <id> --out work/<run>/recipe/sources`
-   (or `--urls <file>` for official URLs established during review). It fetches
-   only allowlisted HTTPS URLs, checks every redirect hop, honors robots.txt, and
-   writes Archivist intake packages plus `acquisition_report.json`. Rerunning resumes
-   and reuses verified downloads. `refused` and `failed` rows are gaps: report them;
-   do not swap in `http`, a mirror, or a guessed URL. `matches_recorded_bytes: false`
-   means the official source changed since the old library captured it, so it is a
-   new edition to review, not the old record. Package hints are leads, not identity
-   evidence.
-4. **Review.** For every package, perform the Archivist intake review: identity,
-   provenance, complete page-located extraction, parity, taxonomy and naming,
-   lifecycle. Write the hash-bound intake plan beside the packages in the recipe
-   directory. Ambiguous lifecycle stays unresolved, never `current`.
-5. **Evaluations.** Write genuine retrieval cases for the declared scope, including
-   at least one `require_hit` + `require_locator` case with an expected document.
-6. **Recipe.** Run `python rebuilder.py recipe --dir work/<run>/recipe --release-id <id> --scope "<reviewed scope>"`.
-   It checks what the engine will check and refuses early.
-7. **Build.** Run `python rebuilder.py run --recipe work/<run>/recipe/recipe.json --destination <dest>`.
-   On interruption, rerun the same command; the engine archives incomplete builds
-   and reuses a verified matching release. A held writer lock means another
-   process may be running: inspect the PID, never delete the lock blindly. A
-   changed recipe needs a new empty destination.
-8. **Verify.** Run `python rebuilder.py verify --destination <dest> --release-id <id>`.
-   No rebuild is done until this passes.
-9. **Hand off.** Give the user the destination, release ID, route counts, excluded
-   scope, and every gap. Release events in the destination go to
-   `../dcsa-archivist/agents/conductor.md` for comparison and Guidance Watch. Update
-   `HANDOFF.md`. Switching consumers to the new library is the user's decision.
+   (or `--urls <file>`). Allowlisted HTTPS only, redirects checked, robots.txt
+   honored. `refused`/`failed` rows are gaps to report. `matches_recorded_bytes:
+   false` means a new edition to review, not the old record. Hints are leads only.
+4. **Review.** For each package: identity, provenance, complete page-located text
+   extraction (form feed between pages), parity with the original, taxonomy and
+   naming, lifecycle. Write `work/<run>/recipe/intake_plan.json`. Ambiguous
+   lifecycle stays `current_or_verify`, never `current`. Include at least one
+   current CFR or DFARS source: without controlling authority the build refuses to
+   publish, because consumers could not answer contractor-obligation questions.
+5. **Evaluations.** Write lexical retrieval cases in `golden_queries.json`, each with
+   a unique `id` and `query`, including a `require_hit` + `require_locator` case with
+   expected documents. Semantic cases are not supported standalone.
+6. **Recipe.** `python rebuilder.py recipe --dir work/<run>/recipe --release-id <id> --scope "<reviewed scope>"`.
+7. **Build.** `python rebuilder.py run --recipe work/<run>/recipe/recipe.json --destination <dest>`.
+   It enriches, chunks, indexes, validates and evaluates in a sibling staging
+   folder and moves the library into place only after the consumer release contract
+   passes. A refusal leaves the destination untouched and keeps reports in
+   `.<dest>.failed-*`; fix the cause and rerun. Rerunning an identical recipe on a
+   published destination verifies instead of rebuilding. A held
+   `.<dest>.rebuild.lock` means another build may be running: inspect the PID,
+   never delete the lock blindly.
+8. **Verify.** `python rebuilder.py verify --destination <dest> --release-id <id>`.
+   Not done until this passes.
+9. **Hand off.** Report destination, release ID, build date, route counts, excluded
+   scope, every gap, the lexical-only and no-DOHA limits, and the notice again.
+   Update `HANDOFF.md`. Switching consumers to the rebuilt library is the user's
+   decision, made knowing it is unmaintained.

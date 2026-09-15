@@ -1,20 +1,29 @@
-"""Assemble a hash-bound regeneration recipe and refuse what the engine would refuse."""
+"""Assemble a hash-bound rebuild recipe and refuse what the build would refuse."""
 from __future__ import annotations
 
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
-from .common import inside, read_json, sha256_file, write_json
+from .common import read_json, sha256_file, write_json
+from .paths import inside
 
 RELEASE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 REVIEW_FIELDS = ("reviewed_by", "reviewed_utc", "identity", "provenance", "extraction", "parity", "taxonomy", "lifecycle")
 RECORD_FIELDS = ("document_id", "collection_id", "domain", "authority_tier", "current_status",
                  "human_source_path", "robot_text_path")
+PATH_PREFIXES = {"human_source_path": "HUMAN_READABLE_DIRECTORY/", "robot_text_path": "ROBOT_READABLE_DIRECTORY/TEXT/"}
 
 
 def check_evaluations(path: Path) -> None:
     cases = read_json(path).get("cases", [])
+    ids = [case.get("id") for case in cases]
+    if not cases or any(not isinstance(i, str) or not i.strip() for i in ids) or len(set(ids)) != len(ids):
+        raise ValueError("Evaluations need nonempty, uniquely identified cases")
+    if any(not str(case.get("query", "")).strip() for case in cases):
+        raise ValueError("Every evaluation case needs a query")
+    if any(case.get("retrieval_mode", "lexical") != "lexical" for case in cases):
+        raise ValueError("Standalone builds support lexical evaluation only; semantic cases need the Archivist embedding runtime")
     if not any(case.get("require_hit") is True and case.get("require_locator") is True
                and case.get("expected_document_ids") for case in cases):
         raise ValueError("Evaluations need a positive document-and-locator retrieval case")
@@ -26,7 +35,7 @@ def check_intake(plan_path: Path) -> list[str]:
     if plan.get("schema_version") != "1.0" or not items:
         raise ValueError("Intake plan needs schema_version 1.0 and at least one item")
     base = plan_path.parent
-    ids = []
+    ids, paths = [], set()
     for item in items:
         record, review = item.get("record", {}), item.get("review", {})
         document_id = record.get("document_id")
@@ -34,13 +43,23 @@ def check_intake(plan_path: Path) -> list[str]:
             raise ValueError("Every intake item needs a document_id")
         if record.get("collection_id") == "doha_decisions":
             raise ValueError(f"DOHA reconstruction is unsupported: {document_id}")
-        # Mirrors dcsa_custodian.intake.stage_intake so failures surface before a build.
         missing = [k for k in REVIEW_FIELDS if not str(review.get(k, "")).strip()]
         if missing:
             raise ValueError(f"{document_id} lacks review evidence: {', '.join(missing)}")
         missing = [k for k in RECORD_FIELDS if record.get(k) in (None, "")]
         if missing:
             raise ValueError(f"{document_id} lacks reviewed record fields: {', '.join(missing)}")
+        try:
+            int(record["authority_tier"])
+        except (TypeError, ValueError):
+            raise ValueError(f"{document_id} authority_tier must be an integer") from None
+        for key, prefix in PATH_PREFIXES.items():
+            value = str(record[key]).replace("\\", "/")
+            if not value.startswith(prefix) or ".." in PurePosixPath(value).parts:
+                raise ValueError(f"{document_id} {key} must stay under {prefix}")
+            if value.casefold() in paths:
+                raise ValueError(f"{document_id} reuses a library path: {value}")
+            paths.add(value.casefold())
         package_path = inside(base, item.get("package", ""))
         package = read_json(package_path)
         if package.get("approval_state") != "quarantined_unreviewed":

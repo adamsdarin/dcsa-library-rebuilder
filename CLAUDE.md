@@ -23,5 +23,9 @@ Full rules: `C:\Users\darin\src\HANDOFF-PROTOCOL.md`
 
 ## Claude-specific notes
 
-The Archivist build has hung in fastembed workers when launched from the Git Bash
-background shell (WinError 6). Run `rebuilder.py run` from PowerShell.
+Open every rebuild conversation, and close every handoff, with the standalone
+maintenance notice from `agents/rebuilder.md`: without the Librarian and the
+Archivist the rebuilt library is not maintained autonomously.
+
+The copied Archivist modules must not be edited here; change them upstream and run
+`python ../workspace_health.py sync`.

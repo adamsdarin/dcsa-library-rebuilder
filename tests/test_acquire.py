@@ -144,7 +144,8 @@ class AcquireTests(unittest.TestCase):
                        "human_source_path": "HUMAN_READABLE_DIRECTORY/REGULATIONS/CFR/a.pdf",
                        "robot_text_path": "ROBOT_READABLE_DIRECTORY/TEXT/REGULATIONS/CFR/a.txt"}}]})
         write_json(recipe_dir / "golden_queries.json", {"cases": [
-            {"require_hit": True, "require_locator": True, "expected_document_ids": ["doc-1"]}]})
+            {"id": "page-one", "query": "page one text", "require_hit": True, "require_locator": True,
+             "expected_document_ids": ["doc-1"]}]})
         recipe = json.loads(build_recipe(recipe_dir, "rebuild-1", "scope").read_text())
         self.assertEqual(recipe["required_document_ids"], ["doc-1"])
 
@@ -154,7 +155,7 @@ class AcquireTests(unittest.TestCase):
         urls = self.root / "urls.txt"
         urls.write_text("https://www.example.gov/a.pdf\n")
         config = self.root / "rebuilder.json"
-        write_json(config, {"archivist_root": str(self.root), "protected_libraries": [str(library)],
+        write_json(config, {"protected_libraries": [str(library)],
                             "acquisition": SETTINGS})
         code = main(["--config", str(config), "acquire", "--urls", str(urls), "--out", str(library / "q")])
         self.assertEqual(code, 2)
