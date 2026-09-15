@@ -1,13 +1,15 @@
 # HANDOFF — dcsa-library-rebuilder
 
-Last updated: 2026-09-15T19:30:00Z by Claude
+Last updated: 2026-09-15T21:00:00Z by Claude
 
 ## Current State
-New single-purpose repository: an agent whose only job is rebuilding a DCSA
-Library into an empty destination. Prompt `agents/rebuilder.md`; stdlib CLI
-`rebuilder.py` with `census`, `recipe`, `preflight`, `run`, `verify`. The build is
+Single-purpose agent that rebuilds a DCSA Library into an empty destination.
+Prompt `agents/rebuilder.md`; stdlib CLI `rebuilder.py` with `census`, `acquire`,
+`recipe`, `preflight`, `run`, `verify`. No Librarian dependency: `acquire` fetches
+allowlisted HTTPS sources and writes Archivist intake packages. The build is
 delegated to `../dcsa-archivist/custodian.py regenerate`; nothing is reimplemented.
-15 offline tests pass; Archivist `tests.test_regenerate` 7/7 pass.
+26 offline tests pass. A rebuilder-produced package was accepted by Archivist's
+real `stage_intake` (one-off check, temp dirs). No live download has been run.
 
 Live read-only census of the canonical library (release
 `dd254-dec1999-lifecycle-fix-20260915`, manifest hash unchanged): 11,622 records —
@@ -21,8 +23,10 @@ for lacking a regeneration marker. No acquisition, build or publication was run.
 1. Commit Archivist's `regenerate.py`, `doha.py`, `docs/REGENERATION.md` and tests;
    they are untracked Codex work, so a fresh clone of `dcsa-archivist` lacks the
    engine this agent drives. `preflight` reports that case.
-2. First real run: a small general-source scope (for example URL-backed records in
-   one collection) into a scratch destination, then `verify`.
+2. First real run, with the user's go-ahead for downloads: `acquire` one small
+   collection of URL-backed records into `work/`, review, recipe, `run` into a
+   scratch destination, then `verify`. Two recorded URLs are plain http and will be
+   refused as gaps by design.
 3. Provenance backfill for the 749 retained-bytes-only records is the largest
    blocker to a complete general-source rebuild; it is Archivist review work.
 
@@ -32,6 +36,13 @@ for lacking a regeneration marker. No acquisition, build or publication was run.
   pointer here? Left untouched pending that decision.
 
 ## Log
+2026-09-15 21:00 Claude — User directed that the agent work independently of
+Librarian. Added `acquire` instead of calling Librarian: fetches explicit official
+URLs (census or list), not a crawler, since discovery of new sources stays
+Librarian's job for the live library. HTTPS-only because Archivist intake rejects
+anything else; no http upgrade or mirror substitution. Robots per RFC 9309 (5xx or
+unreachable = disallow). Records `matches_recorded_bytes` so changed official
+sources surface as new editions. `recipe` now mirrors every `stage_intake` check.
 2026-09-15 19:30 Claude — Created the repository at the user's request for a
 dedicated rebuild agent. Chose orchestration over extraction: moving `regenerate.py`
 out of Archivist would reorganize uncommitted Codex work and split the release code

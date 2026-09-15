@@ -15,6 +15,9 @@ Read `AGENTS.md`, `HANDOFF.md`, and the engine contracts this agent drives:
 | Interpret a guidance change | `fso-guidance-watch/` |
 | Maintain, repair, rename or publish into an existing library | `dcsa-archivist/` |
 | Scheduled discovery of new sources for the live library | `dcsa-librarian/` |
+
+This agent does not use Librarian. It acquires its own sources, and needs only a
+checkout of `dcsa-archivist` for the build engine.
 | Point consumers at a rebuilt library | The user, explicitly, after `verify` passes |
 
 Never write into the canonical library or any path listed in
@@ -40,11 +43,17 @@ published.
      carries it.
    - `doha_unsupported` — DOHA case reconstruction is not implemented. Report it as
      excluded scope; do not narrow the request silently.
-3. **Acquire through Librarian.** Use its entry points into a run-owned quarantine,
-   for example
-   `python ../dcsa-librarian/custodian.py discover --download --quarantine-dir work/<run>/quarantine`.
-   Preserve inaccessible and missing results. An incomplete sweep is reported as
-   incomplete, never as a complete library.
+3. **Acquire.** Confirm the scope with the user first; this downloads from official
+   sites. Run
+   `python rebuilder.py acquire --census work/<run>/census.json --collection <id> --out work/<run>/recipe/sources`
+   (or `--urls <file>` for official URLs established during review). It fetches
+   only allowlisted HTTPS URLs, checks every redirect hop, honors robots.txt, and
+   writes Archivist intake packages plus `acquisition_report.json`. Rerunning resumes
+   and reuses verified downloads. `refused` and `failed` rows are gaps: report them;
+   do not swap in `http`, a mirror, or a guessed URL. `matches_recorded_bytes: false`
+   means the official source changed since the old library captured it, so it is a
+   new edition to review, not the old record. Package hints are leads, not identity
+   evidence.
 4. **Review.** For every package, perform the Archivist intake review: identity,
    provenance, complete page-located extraction, parity, taxonomy and naming,
    lifecycle. Write the hash-bound intake plan beside the packages in the recipe

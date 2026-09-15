@@ -1,7 +1,11 @@
 {
   "archivist_root": "../dcsa-archivist",
-  "librarian_root": "../dcsa-librarian",
   "protected_libraries": [
     "<absolute path to the canonical DCSA Library>"
-  ]
+  ],
+  "acquisition": {
+    "allowed_domains": ["gov", "mil", "cdse.edu", "wbdg.org", "resources.sei.cmu.edu"],
+    "max_bytes": 262144000,
+    "delay_seconds": 1.0
+  }
 }

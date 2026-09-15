@@ -9,13 +9,13 @@ library, or switch consumers to the rebuilt copy.
 
 ## How it fits
 
-This repository is the operating agent. The build itself is performed by the
-Archivist's deterministic engine (`dcsa-archivist`, `custodian.py regenerate`) and
-sources come through the Librarian (`dcsa-librarian`). Nothing here reimplements
-either; the rebuilder checks, sequences, records and verifies.
+This repository is the operating agent and works without Librarian: it acquires
+official sources itself and writes Archivist-format intake packages. The build is
+performed by the Archivist's deterministic engine (`dcsa-archivist`,
+`custodian.py regenerate`), which is not reimplemented here.
 
 ```text
-census (read-only) -> Librarian acquisition -> Archivist review -> recipe
+census (read-only) -> acquire -> review -> recipe
     -> preflight -> engine regenerate -> verify -> release events to conductor
 ```
 
@@ -23,9 +23,10 @@ Agent entry point: [`agents/rebuilder.md`](agents/rebuilder.md).
 
 ## Setup
 
-Python 3.11+, standard library only. Requires sibling checkouts of
-`dcsa-archivist` (with the `regenerate` command and its embedding runtime) and
-`dcsa-librarian`.
+Python 3.11+, standard library only. Requires a sibling checkout of
+`dcsa-archivist` (with the `regenerate` command and its embedding runtime) for
+`preflight` and `run`. `census`, `acquire`, `recipe` and `verify` need no other
+repository.
 
 ```powershell
 Copy-Item config\rebuilder.example.json config\rebuilder.json   # then set real paths
@@ -41,7 +42,8 @@ destination that equals, sits inside, or contains a protected library is refused
 | Command | Writes | Purpose |
 |---|---|---|
 | `census --library <root> --out <file>` | report only | Classify each document by rebuild route |
-| `recipe --dir <recipe dir> --release-id <id> --scope "<text>"` | `recipe.json` | Hash-bind a reviewed intake plan and evaluations; refuse early |
+| `acquire (--census <file> [--collection <id>] \| --urls <file>) --out <dir>` | packages, `acquisition_report.json` | Fetch allowlisted HTTPS sources into a run-owned quarantine |
+| `recipe --dir <recipe dir> --release-id <id> --scope "<text>"` | `recipe.json` | Hash-bind a reviewed intake plan and evaluations; refuse what Archivist intake would refuse |
 | `preflight --destination <dir>` | nothing | Engine present, destination empty, not protected, no held lock |
 | `run --recipe <file> --destination <dir>` | destination, `runs/` ledger | Preflight, then invoke the engine |
 | `verify --destination <dir> [--release-id <id>]` | nothing | Fail-closed approved-release and integrity check |

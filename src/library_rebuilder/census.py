@@ -45,6 +45,8 @@ def census(library: Path) -> dict:
                 "current_status": record.get("current_status"),
                 "route": route(record),
                 "official_url": next((record[f] for f in URL_FIELDS if record.get(f)), None),
+                # Lets acquisition report whether the official source changed since capture.
+                "recorded_sha256": record.get("source_sha256"),
             })
     pointer = library / POINTER
     by_route = Counter(item["route"] for item in documents)

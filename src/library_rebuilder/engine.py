@@ -20,15 +20,20 @@ def load_config(path: Path, base: Path) -> dict:
     if not path.is_file():
         raise ValueError(f"Missing {path}; copy config/rebuilder.example.json and set explicit paths")
     config = read_json(path)
-    for key in ("archivist_root", "librarian_root"):
-        if not config.get(key):
-            raise ValueError(f"Config needs {key}")
-        config[key] = str((Path(base) / config[key]).resolve())
+    if not config.get("archivist_root"):
+        raise ValueError("Config needs archivist_root")
+    config["archivist_root"] = str((Path(base) / config["archivist_root"]).resolve())
     protected = config.get("protected_libraries", [])
     if not protected or any("<" in str(p) for p in protected):
         raise ValueError("Config needs at least one real protected_libraries entry (the canonical library)")
     config["protected_libraries"] = [str((Path(base) / p).resolve()) for p in protected]
     return config
+
+
+def protected_overlap(config: dict, target: Path) -> list[str]:
+    target = Path(target).resolve()
+    return [f"Path overlaps protected library: {protected}" for protected in map(Path, config["protected_libraries"])
+            if target == protected or target.is_relative_to(protected) or protected.is_relative_to(target)]
 
 
 def _engine(config: dict) -> Path:
@@ -46,11 +51,7 @@ def preflight(config: dict, destination: Path) -> dict:
                                cwd=engine.parent, capture_output=True, text=True)
         if probe.returncode != 0:
             errors.append("Archivist checkout has no working 'regenerate' command")
-    if not (Path(config["librarian_root"]).resolve() / "custodian.py").is_file():
-        errors.append("Librarian entry point not found")
-    for protected in map(Path, config["protected_libraries"]):
-        if destination == protected or destination.is_relative_to(protected) or protected.is_relative_to(destination):
-            errors.append(f"Destination overlaps protected library: {protected}")
+    errors.extend(protected_overlap(config, destination))
     if destination.exists():
         if not destination.is_dir():
             errors.append("Destination exists and is not a directory")

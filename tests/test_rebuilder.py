@@ -12,7 +12,8 @@ from library_rebuilder.common import sha256_file, write_json  # noqa: E402
 from library_rebuilder.engine import MARKER, load_config, preflight, run, verify  # noqa: E402
 from library_rebuilder.recipe import build_recipe  # noqa: E402
 
-REVIEW = {k: "synthetic evidence" for k in ("identity", "provenance", "extraction", "parity", "taxonomy", "lifecycle")}
+REVIEW = {k: "synthetic evidence" for k in ("reviewed_by", "reviewed_utc", "identity", "provenance",
+                                              "extraction", "parity", "taxonomy", "lifecycle")}
 
 FAKE_ENGINE = textwrap.dedent('''
     import json, sys
@@ -36,26 +37,30 @@ class Workspace(unittest.TestCase):
         self._tmp.cleanup()
 
     def config(self, engine=FAKE_ENGINE):
-        archivist, librarian, library = self.root / "archivist", self.root / "librarian", self.root / "library"
-        for path in (archivist, librarian, library):
+        archivist, library = self.root / "archivist", self.root / "library"
+        for path in (archivist, library):
             path.mkdir(exist_ok=True)
         (archivist / "custodian.py").write_text(engine)
-        (librarian / "custodian.py").write_text("")
         (library / "START_HERE_FOR_ROBOTS.json").write_text("{}")
-        return {"archivist_root": str(archivist), "librarian_root": str(librarian),
-                "protected_libraries": [str(library.resolve())]}
+        return {"archivist_root": str(archivist), "protected_libraries": [str(library.resolve())]}
 
     def recipe_dir(self, cases=None, collection="cfr"):
         directory = self.root / "recipe"
         directory.mkdir()
         (directory / "source.pdf").write_bytes(b"%PDF synthetic")
         (directory / "source.txt").write_text("page one")
-        write_json(directory / "source.pdf.intake.json",
-                   {"source_filename": "source.pdf", "source_sha256": sha256_file(directory / "source.pdf")})
+        write_json(directory / "source.pdf.intake.json", {
+            "source_filename": "source.pdf", "source_sha256": sha256_file(directory / "source.pdf"),
+            "source_bytes": (directory / "source.pdf").stat().st_size, "approval_state": "quarantined_unreviewed",
+            "requested_source_uri": "https://example.gov/a.pdf", "resolved_source_uri": "https://example.gov/a.pdf",
+            "retrieved_at": "2026-01-01T00:00:00Z", "mime_type": "application/pdf"})
+        record = {"document_id": "doc-1", "collection_id": collection, "domain": "REGULATIONS",
+                  "authority_tier": 1, "current_status": "current",
+                  "human_source_path": "HUMAN_READABLE_DIRECTORY/REGULATIONS/CFR/a.pdf",
+                  "robot_text_path": "ROBOT_READABLE_DIRECTORY/TEXT/REGULATIONS/CFR/a.txt"}
         write_json(directory / "intake_plan.json", {"schema_version": "1.0", "items": [{
             "package": "source.pdf.intake.json", "robot_file": "source.txt",
-            "robot_sha256": sha256_file(directory / "source.txt"),
-            "record": {"document_id": "doc-1", "collection_id": collection}, "review": REVIEW}]})
+            "robot_sha256": sha256_file(directory / "source.txt"), "record": record, "review": REVIEW}]})
         write_json(directory / "golden_queries.json", {"cases": cases if cases is not None else [
             {"require_hit": True, "require_locator": True, "expected_document_ids": ["doc-1"]}]})
         return directory
@@ -117,13 +122,11 @@ class RecipeTests(Workspace):
 class EngineTests(Workspace):
     def test_config_resolves_against_repo_root_and_rejects_placeholder(self):
         repo = self.root / "repo"
-        write_json(repo / "config/rebuilder.json", {"archivist_root": "../archivist", "librarian_root": "../librarian",
-                                                     "protected_libraries": ["../library"]})
+        write_json(repo / "config/rebuilder.json", {"archivist_root": "../archivist", "protected_libraries": ["../library"]})
         config = load_config(repo / "config/rebuilder.json", repo)
         self.assertEqual(Path(config["archivist_root"]), (self.root / "archivist").resolve())
         self.assertEqual(Path(config["protected_libraries"][0]), (self.root / "library").resolve())
-        write_json(repo / "config/example.json", {"archivist_root": "a", "librarian_root": "b",
-                                                   "protected_libraries": ["<absolute path>"]})
+        write_json(repo / "config/example.json", {"archivist_root": "a", "protected_libraries": ["<absolute path>"]})
         with self.assertRaisesRegex(ValueError, "protected_libraries"):
             load_config(repo / "config/example.json", repo)
 

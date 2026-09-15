@@ -17,8 +17,10 @@ Custodian gates, and verify it. Entry point: `agents/rebuilder.md`.
    contains one. Existing libraries are never replaced.
 2. The build runs only through `../dcsa-archivist/custodian.py regenerate`. Do not
    copy, fork or reimplement engine, validation or publication code here.
-3. Sources come through Librarian and are reviewed to the Archivist intake
-   contract before a recipe is written. No guessed URLs; gaps stay gaps.
+3. Sources come only from `rebuilder.py acquire` (allowlisted HTTPS, verified
+   redirects, robots.txt honored); there is no Librarian dependency. Every package
+   is reviewed to the Archivist intake contract before a recipe is written. No
+   guessed URLs; refused and failed acquisitions stay reported gaps.
 4. DOHA case reconstruction is unsupported. Report it as excluded scope.
 5. Never weaken evaluation cases to publish.
 6. A rebuild is not done until `verify` passes. Pointing consumers at the result

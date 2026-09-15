@@ -4,9 +4,10 @@ import argparse
 import json
 from pathlib import Path
 
+from .acquire import acquire, targets_from
 from .census import census
 from .common import write_json
-from .engine import load_config, preflight, run, verify
+from .engine import load_config, preflight, protected_overlap, run, verify
 from .recipe import build_recipe
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -20,6 +21,13 @@ def main(argv=None) -> int:
     c = commands.add_parser("census", help="Read-only: classify every document by rebuild route")
     c.add_argument("--library", type=Path, required=True)
     c.add_argument("--out", type=Path, required=True)
+
+    a = commands.add_parser("acquire", help="Fetch official HTTPS sources into a run-owned quarantine")
+    a.add_argument("--census", type=Path, help="Census report; uses reacquire_from_official_url documents")
+    a.add_argument("--urls", type=Path, help="Text file of official URLs, one per line")
+    a.add_argument("--collection", action="append", help="Limit census targets to this collection (repeatable)")
+    a.add_argument("--limit", type=int)
+    a.add_argument("--out", type=Path, required=True)
 
     r = commands.add_parser("recipe", help="Write recipe.json from a reviewed intake plan and evaluations")
     r.add_argument("--dir", type=Path, required=True)
@@ -53,6 +61,16 @@ def main(argv=None) -> int:
             result = verify(args.destination, args.release_id)
         else:
             config = load_config(args.config, PROJECT_ROOT)
+            if args.command == "acquire":
+                if not (args.census or args.urls):
+                    raise ValueError("acquire needs --census or --urls")
+                overlap = protected_overlap(config, args.out)
+                if overlap:
+                    raise ValueError("; ".join(overlap))
+                targets = targets_from(args.census, args.urls, args.collection, args.limit)
+                report = acquire(targets, args.out, config.get("acquisition", {}))
+                print(json.dumps({k: report[k] for k in ("requested", "counts", "complete", "changed_since_recorded")}, indent=2))
+                return 0 if report["complete"] else 1
             if args.command == "preflight":
                 result = preflight(config, args.destination)
             else:
