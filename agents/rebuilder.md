@@ -40,7 +40,7 @@ copy a corpus wholesale and call it a rebuild. Never weaken an evaluation case.
    (read-only). Report the routes before acquiring:
    `reacquire_from_official_url` (official URL on record), `retained_bytes_only`
    (no official origin on record: needs provenance review, never a guessed URL),
-   `source_missing`, `duplicate_skip`, `doha_unsupported` (excluded scope).
+   `source_missing`, `duplicate_skip`. DOHA rows additionally require case-metadata review.
 3. **Acquire.** Downloads come from official sites, so confirm scope with the user.
    `python rebuilder.py acquire --census work/<run>/census.json --collection <id> --out work/<run>/recipe/sources`
    (or `--urls <file>`). Allowlisted HTTPS only, redirects checked, robots.txt
@@ -52,6 +52,8 @@ copy a corpus wholesale and call it a rebuild. Never weaken an evaluation case.
    lifecycle stays `current_or_verify`, never `current`. Include at least one
    current CFR or DFARS source: without controlling authority the build refuses to
    publish, because consumers could not answer contractor-obligation questions.
+   DOHA records additionally require `doha_review` and reviewed `doha_taxonomy`,
+   as described in `docs/DOHA-RECONSTRUCTION.md`. Never infer them from filenames.
 5. **Evaluations.** Write lexical retrieval cases in `golden_queries.json`, each with
    a unique `id` and `query`, including a `require_hit` + `require_locator` case with
    expected documents. Semantic cases are not supported standalone.
@@ -67,6 +69,6 @@ copy a corpus wholesale and call it a rebuild. Never weaken an evaluation case.
 8. **Verify.** `python rebuilder.py verify --destination <dest> --release-id <id>`.
    Not done until this passes.
 9. **Hand off.** Report destination, release ID, build date, route counts, excluded
-   scope, every gap, the lexical-only and no-DOHA limits, and the notice again.
+   scope, every gap, the lexical-only limit and reviewed DOHA coverage, and the notice again.
    Update `HANDOFF.md`. Switching consumers to the rebuilt library is the user's
    decision, made knowing it is unmaintained.

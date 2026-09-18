@@ -107,6 +107,9 @@ def approved_release(root: Path, check_integrity: bool = False, verify_indexes: 
         if relative in forbidden:
             raise ValueError(f"Forbidden DOHA index: {relative}")
         bounded_path(root, relative, "LOCAL_INDEXES/")
+    doha_hashes = access.get('doha_index_sha256')
+    if doha_hashes is not None and (not isinstance(doha_hashes, dict) or set(doha_hashes) != set(doha_paths)):
+        raise ValueError('DOHA approved index hashes are incomplete')
     for relative, expected_hash in pointer.get("metadata_sha256", {}).items():
         if digest(bounded_path(root, relative, "ROBOT_READABLE_DIRECTORY/")) != expected_hash:
             raise ValueError(f"Published metadata hash mismatch: {relative}")
@@ -133,6 +136,8 @@ def approved_release(root: Path, check_integrity: bool = False, verify_indexes: 
                 raise ValueError(f"Approved index integrity failure: {relative}")
         if check_integrity and item and item.get("sha256") and digest(path) != item["sha256"]:
             raise ValueError(f"Approved index hash mismatch: {relative}")
+        if check_integrity and doha_hashes is not None and relative in doha_hashes and digest(path) != doha_hashes[relative]:
+            raise ValueError(f"Approved DOHA index hash mismatch: {relative}")
         checks.append({"path": relative, "records": count, "integrity": "ok" if check_integrity else "not_requested"})
     return {"release_id": release_id, "indexes": indexes, "index_checks": checks,
             "state": state, "query_policy": query, "approval": approval}

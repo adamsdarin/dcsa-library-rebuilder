@@ -35,7 +35,7 @@ class Workspace(unittest.TestCase):
 
 class CensusTests(Workspace):
     def test_routes(self):
-        self.assertEqual(route({"collection_id": "doha_decisions", "source_url": "x"}), "doha_unsupported")
+        self.assertEqual(route({"collection_id": "doha_decisions", "source_url": "x"}), "reacquire_from_official_url")
         self.assertEqual(route({"duplicate_of": "a", "source_url": "x"}), "duplicate_skip")
         self.assertEqual(route({"source_exists": False, "source_url": "x"}), "source_missing")
         self.assertEqual(route({"canonical_source_url": "x"}), "reacquire_from_official_url")
@@ -53,8 +53,8 @@ class CensusTests(Workspace):
         self.assertEqual(sha256_file(manifest), before)
         self.assertEqual(report["total_documents"], 3)
         self.assertEqual(report["by_route"]["reacquire_from_official_url"], 1)
-        self.assertEqual(report["by_route"]["retained_bytes_only"], 1)
-        self.assertEqual(report["by_route"]["doha_unsupported"], 1)
+        self.assertEqual(report["by_route"]["retained_bytes_only"], 2)
+        self.assertTrue(report["documents"][2]["requires_case_metadata_review"])
         self.assertEqual(report["documents"][0]["recorded_sha256"], "ab" * 32)
         self.assertIsNone(report["source_release_id"])
 

@@ -47,12 +47,12 @@ protected library is refused.
 The same layout and contract the Question Bot and Adverse Information Assistant
 already read: `START_HERE_FOR_ROBOTS.json`, enriched manifest, citation-safe chunks,
 six release-scoped FTS5 indexes by authority class, query and access policy,
-retrieval config, release pointer and library state, a navigation graph, and empty
-schema-compatible DOHA stores. Both consumers' real read-only code has been run
+retrieval config, release pointer and library state, a navigation graph, and reviewed
+DOHA case/topic stores (empty when the recipe has no cases). Both consumers' real read-only code has been run
 against a standalone build.
 
 Consistency with the Custodian comes from byte-identical copies of Archivist modules
-(`common`, `authority`, `enrich`, `chunks`, `indexes`, `release_contract`): the same
+(`common`, `authority`, `enrich`, `chunks`, `indexes`, `doha`, `directive_splits`, `wiki`, `release_contract`): the same
 authority roles, answer eligibility, duplicate exclusion, chunk locators and index
 schema. `../workspace_health.py check` reports drift; `sync` refreshes the copies.
 Do not edit them here.
@@ -71,9 +71,8 @@ Nothing reaches the destination unless all pass, in a sibling staging folder:
 
 - **Not maintained.** See the notice above.
 - **Lexical retrieval only.** No semantic vectors; semantic evaluation cases are rejected.
-- **No DOHA cases.** DOHA stores are empty; case reconstruction is unsupported.
-- **No directive splits.** SEAD-3/SEAD-4 section files are not produced, so the
-  Adverse Information Assistant reports `directive_quotations: false`.
-- **Minimal navigation graph** (collections to documents), not the Archivist wiki.
+- **Reviewed DOHA scope only.** See `docs/DOHA-RECONSTRUCTION.md`; missing provenance or case review blocks intake. A build does not establish complete website coverage.
+- **Directive coverage follows source scope.** Current, eligible SEAD-3, SEAD-4 and ISL 2021-02 sources produce verified section files. Broken or historical sources cannot publish current section output.
+- The robot navigation wiki uses the same graph and lint rules as Archivist. It is navigation metadata, never answer evidence.
 - A rebuild from current websites is a new release, not a byte-for-byte copy.
 - Source bytes, extractions, local paths and run ledgers never enter Git.

@@ -1,43 +1,42 @@
 # HANDOFF — dcsa-library-rebuilder
 
-Last updated: 2026-09-15T23:00:00Z by Claude
+Last updated: 2026-09-16T19:47:19.937753+00:00 by Codex
 
 ## Current State
-Standalone, single-purpose rebuild agent: no runtime dependency on Librarian or
-Archivist. Prompt `agents/rebuilder.md`; stdlib CLI `rebuilder.py` with `census`,
-`acquire`, `recipe`, `preflight`, `run`, `verify`. `run` stages, enriches, chunks,
-indexes (FTS5), validates, evaluates and publishes in a sibling staging folder and
-moves the library into place only after `approved_release` passes on it.
+Canonical standalone empty-destination Rebuilder. No runtime dependency on
+Librarian/Archivist. Mandatory unmaintained-snapshot notice remains on every
+command and generated library. Existing source acquisition/config/template edits
+from the previous assistant were preserved.
 
-Every command prints the "not maintained autonomously" banner (stderr) and returns
-`maintenance_mode: standalone_unmaintained`; built libraries carry it in
-`MAINTENANCE_NOTICE.md`, `START_HERE_FOR_HUMANS.md`, `AGENTS.md`, entry point,
-pointer and state.
+Reviewed DOHA reconstruction is now supported: case metadata and taxonomy are
+required, case/topic/path stores preserve exact robot text, and release integrity
+binds stores and metadata. Cases remain precedent, never current guidance.
+Shared doha.py joins the byte-identical Archivist modules checked by workspace_health.
+43 offline tests pass, including from an isolated copy without sibling repositories. A separate workspace integration runs actual Question Bot
+and Adverse Assistant retrieval against a synthetic standalone build, verifying
+default hearing filters and explicit historical/exact-case access.
+No real-network download or full-library rebuild was performed.
 
-Byte-identical Archivist copies: `common`, `authority`, `enrich`, `chunks`,
-`indexes`, `release_contract`; `workspace_health.py check` now reports drift
-(probe confirmed). 37 offline tests pass, also from an isolated copy with no sibling
-repos. Real consumer code against a synthetic standalone build: Question Bot
-`doctor` healthy and `query_release` returned the CFR chunk with tier and locator;
-Adverse Information Assistant `check_library` ready (doha_search and
-directive_quotations false). No live download or real-library rebuild yet.
-
-Live census of the canonical library (read-only): 11,622 records; 237 with an
-official URL, 749 retained-bytes-only, 3 duplicates, 10,633 DOHA (unsupported).
+Verified SEAD/ISL section splitting and the shared robot-wiki graph/lint rules
+are included. Broken or noncurrent directives cannot publish current sections.
+Retrieval remains lexical-only. Historical census totals belong to the prior run; DOHA is no
+longer an unsupported route. Sources without provenance still need review.
 
 ## Next
-1. First real run, with the user's go-ahead for downloads: one small collection that
-   includes a current CFR source, into a scratch destination, then `verify`.
-2. Limits to close if wanted: directive splits (SEAD-3/4 sections for AIA quotations),
-   semantic vectors, DOHA reconstruction, richer navigation graph.
-3. Provenance backfill for the 749 retained-bytes-only records blocks a complete rebuild.
+1. Use a confirmed destination and bounded source scope for a real rebuild.
+2. Preserve the unmaintained-snapshot notice and all source-review gates.
+3. Keep shared rule modules synchronized through workspace_health.
 
 ## Open Questions
-- `../dcsa-archivist/agents/library-regenerator.md` and `regenerate.py` (Codex,
-  uncommitted) now duplicate this agent's purpose via a different engine. Keep both,
-  or retire the Archivist regenerator? Left untouched pending that decision.
+No new implementation decision is needed. A live rebuild still needs a confirmed
+destination and bounded acquisition scope; no live rebuild is claimed here.
 
 ## Log
+2026-09-16 Codex — Closed directive-section and robot-navigation gaps; verified consumer section
+selection, isolated standalone execution, metadata tamper rejection and all 43 tests.
+2026-09-16 Codex — Added reviewed DOHA recipe/build support, publication integrity, census
+routing and real-consumer verification. The separate legacy-regenerator ownership
+question is resolved by workspace routing; new rebuilds come here.
 2026-09-15 23:00 Claude — User directed independence from Archivist too, with a
 use-time warning that the result is not autonomously maintained. Chose byte-identical
 copies of Archivist's rule modules over reimplementation so classification, eligibility,

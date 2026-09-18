@@ -1,0 +1,20 @@
+{
+  "cases": [
+    {
+      "id": "controlling-authority-hit",
+      "query": "insider threat program senior official",
+      "intent": "contractor_or_fso_obligation",
+      "require_hit": true,
+      "require_locator": true,
+      "expected_document_ids": ["<document_id of your current CFR source>"],
+      "expected_passages": ["<a short phrase copied exactly from that source's text>"],
+      "expected_first_roles": ["controlling_regulation"]
+    },
+    {
+      "id": "no-evidence-abstains",
+      "query": "quarterly submarine periscope calibration",
+      "intent": "contractor_or_fso_obligation",
+      "require_abstain": true
+    }
+  ]
+}

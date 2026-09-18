@@ -22,6 +22,9 @@ import uuid
 from .chunks import build_chunks
 from .common import read_json, sha256_file, sha256_text, utc_now, write_json, write_jsonl
 from .enrich import enrich_manifest
+from .doha import append_cases, validate_cases, MANIFEST as DOHA_MANIFEST, TAXONOMY as DOHA_TAXONOMY
+from .directive_splits import build_directive_splits
+from .wiki import build_graph, lint_report
 from .indexes import build_indexes
 from .notice import MAINTENANCE_MODE, NOTICE, human_notice
 from .paths import inside
@@ -277,12 +280,13 @@ Automated consumers must use `START_HERE_FOR_ROBOTS.json` as the canonical entry
 - Treat `human_source_path` as citation and human-navigation metadata only.
 - Resolve the active release from `ROBOT_READABLE_DIRECTORY/STATE/CURRENT_CUSTODIAN_RELEASE.json` and require matching published state and approval.
 - General retrieval uses that release's indexes listed in `ROBOT_READABLE_DIRECTORY/RETRIEVAL/INDEX_CATALOG.json`, gated by `QUERY_POLICY.json` and each index's `allowed_intents` and `default_allowed` fields.
-- This standalone rebuild has no DOHA case coverage; the DOHA stores are intentionally empty.
+- DOHA case coverage is limited to reviewed recipe entries. Default precedent retrieval requires eligible post-SEAD-4 hearings and topic gating; cases never establish contractor duties.
 - State the build date when answering: `maintenance_mode` is `{MAINTENANCE_MODE}`, so currency is not maintained.
 """
 
 
-def _publish(stage: Path, recipe: dict, records: list[dict], chunks: list[dict], catalog: list[dict], validation: dict) -> dict:
+def _publish(stage: Path, recipe: dict, records: list[dict], chunks: list[dict], catalog: list[dict], validation: dict,
+             directive_paths=()) -> dict:
     release_id, published = recipe["release_id"], utc_now()
     approval = {"schema_version": "1.0", "release_id": release_id, "approved_utc": published,
                 "approved_by": f"{PRODUCER} (standalone automated gate)", "scope": "standalone_rebuild",
@@ -292,18 +296,21 @@ def _publish(stage: Path, recipe: dict, records: list[dict], chunks: list[dict],
     write_json(stage / QUERY, _query_policy(release_id, catalog))
     write_json(stage / POLICY, {"schema_version": "1.0", "content_access": {
         "approved_indexes_mode": "resolve_from_index_catalog", "retrieval_forbidden_indexes": [],
-        "doha_approved_indexes": DOHA, "human_directory": "citation_and_human_navigation_only_do_not_dereference"}})
+        "doha_approved_indexes": DOHA, "doha_index_sha256": {p: sha256_file(stage / p) for p in DOHA},
+        "human_directory": "citation_and_human_navigation_only_do_not_dereference"}})
     write_json(stage / CONFIG, {"schema_version": "1.0", "default_index_mode": "resolve_from_index_catalog",
                                 "index_catalog": CATALOG, "query_policy": QUERY, "current_release_pointer": POINTER,
                                 "access_policy": POLICY, "library_state": STATE, "entry_point": ENTRY,
                                 "doha_index": DOHA[0], "doha_current_paths_index": DOHA[1]})
-    write_json(stage / ROUTER, {"doha_content_index": DOHA[0], "current_doha_path_index": DOHA[1],
-                                "coverage": "No DOHA cases in this standalone general-source rebuild", "topics": []})
+    if not (stage / ROUTER).exists():
+        write_json(stage / ROUTER, {"doha_content_index": DOHA[0], "current_doha_path_index": DOHA[1],
+                                    "coverage": "No DOHA cases in this standalone general-source rebuild", "topics": []})
     write_json(stage / STATE, {
         "schema_version": "1.0", "release_id": release_id, "release_status": "published", "published_utc": published,
         "approval": approval, "production_integrity_healthy": True, "production_response_ready": True,
         "publication_blockers": [], "approved_indexes": catalog, "candidate_indexes": [],
         "manifest_records": len(records), "citation_safe_chunks": len(chunks),
+        "directive_split_files": len(directive_paths),
         "answer_eligibility_counts": dict(collections.Counter(r["answer_eligibility"] for r in records)),
         "readiness_scope": "validated approved indexes for the recipe scope only; unresolved and historical material excluded from default retrieval",
         "recipe_scope": recipe["scope"], "built_by": PRODUCER, "semantic_retrieval": "not_built_lexical_only",
@@ -311,8 +318,7 @@ def _publish(stage: Path, recipe: dict, records: list[dict], chunks: list[dict],
     })
     write_json(stage / WIKI, {
         "schema_version": "1.0", "release_id": release_id, "use": "navigation_only_not_answer_evidence",
-        "graph": {"collections": {c: sorted(r["document_id"] for r in records if r["collection_id"] == c)
-                                  for c in sorted({r["collection_id"] for r in records})}},
+        "graph": build_graph(records),
         "documents": [{k: r.get(k) for k in ("document_id", "title", "robot_text_path", "human_source_path", "answer_eligibility")} for r in records],
     })
     entry = {"schema_version": "2.1",
@@ -332,7 +338,7 @@ def _publish(stage: Path, recipe: dict, records: list[dict], chunks: list[dict],
     pointer = {"schema_version": "1.1", "release_id": release_id, "published_utc": published, "approval": approval,
                "derived_artifacts_only": False, "maintenance_mode": MAINTENANCE_MODE,
                "validation": {"valid": True, "publishable": True, "validated_utc": validation["validated_utc"]},
-               "metadata_sha256": {rel: sha256_file(stage / rel) for rel in (STATE, CATALOG, QUERY, POLICY, CONFIG, WIKI, ENRICHED, CHUNKS)}}
+               "metadata_sha256": {rel: sha256_file(stage / rel) for rel in (STATE, CATALOG, QUERY, POLICY, CONFIG, WIKI, ENRICHED, CHUNKS, ROUTER, DOHA_MANIFEST, DOHA_TAXONOMY, *directive_paths) if (stage / rel).is_file()}}
     write_json(stage / POINTER, pointer)
     return pointer
 
@@ -342,8 +348,25 @@ def _build_into(stage: Path, recipe: dict, artifacts: dict, items: list[dict], f
     reports = stage / ".rebuilder/reports"
     records = _stage_sources(stage, items)
     _empty_doha(stage)
+    doha_records = [r for r in records if r.get('collection_id') == 'doha_decisions']
+    if doha_records:
+        taxonomy = read_json(artifacts['intake_plan'])['doha_taxonomy']
+        append_cases(stage, doha_records, taxonomy)
+        doha_errors = validate_cases(stage, doha_records, taxonomy)
+        if doha_errors:
+            raise BuildRefused('; '.join(doha_errors))
     records = enrich_manifest(stage, stage / DOCUMENTS, {r["document_id"]: r["source_sha256"] for r in records})
     write_jsonl(stage / ENRICHED, records)
+    write_json(reports / 'WIKI_LINT.json', lint_report(records, f'standalone:{release_id}'))
+    directive_files, directive_problems, directive_skipped = build_directive_splits(stage, records, producer=PRODUCER)
+    write_json(reports / 'DIRECTIVE_SPLIT_REPORT.json', dict(problems=directive_problems,
+        skipped=directive_skipped, files_written=len(directive_files)))
+    if directive_problems:
+        raise BuildRefused('Directive splitting failed: ' + '; '.join(directive_problems))
+    for item in directive_files:
+        target = bounded_path(stage, item['relative_path'], 'ROBOT_READABLE_DIRECTORY/TEXT/')
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(item['content'], encoding='utf-8', newline='\n')
     chunks = build_chunks(stage, records, CHUNK_TARGET, CHUNK_MAXIMUM, CHUNK_OVERLAP)
     write_jsonl(stage / CHUNKS, chunks)
     index_dir = stage / "LOCAL_INDEXES/CUSTODIAN" / release_id
@@ -364,7 +387,8 @@ def _build_into(stage: Path, recipe: dict, artifacts: dict, items: list[dict], f
         shutil.copy2(artifacts[key], reports / artifacts[key].name)
     if not validation["publishable"]:
         raise BuildRefused("; ".join(validation["errors"][:5] + validation["publication_blockers"]) or "not publishable")
-    pointer = _publish(stage, recipe, records, chunks, catalog, validation)
+    pointer = _publish(stage, recipe, records, chunks, catalog, validation,
+        directive_paths=[item['relative_path'] for item in directive_files])
     # The same fail-closed check every consumer runs, before the library is visible anywhere.
     health = approved_release(stage, check_integrity=True)
     write_json(stage / MARKER, {"schema_version": "1.0", "producer": PRODUCER, "fingerprint": fingerprint,

@@ -1,0 +1,7 @@
+# One official HTTPS source URL per line. Lines starting with # are ignored.
+# Only allowlisted official hosts are fetched (see config/rebuilder.example.json).
+# Include at least one current controlling regulation, or the build will refuse to
+# publish: a library without it cannot answer contractor-obligation questions.
+#
+# https://www.ecfr.gov/...        (32 CFR Part 117, NISPOM)
+# https://www.dcsa.mil/...        (DCSA guidance)

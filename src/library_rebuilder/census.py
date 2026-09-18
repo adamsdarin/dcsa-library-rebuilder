@@ -10,14 +10,10 @@ from .common import read_json, sha256_file, utc_now
 MANIFEST = "ROBOT_READABLE_DIRECTORY/MANIFESTS/documents.jsonl"
 POINTER = "ROBOT_READABLE_DIRECTORY/STATE/CURRENT_CUSTODIAN_RELEASE.json"
 URL_FIELDS = ("source_url", "canonical_source_url", "canonical_source_uri")
-ROUTES = ("reacquire_from_official_url", "retained_bytes_only", "source_missing",
-          "duplicate_skip", "doha_unsupported")
+ROUTES = ("reacquire_from_official_url", "retained_bytes_only", "source_missing", "duplicate_skip")
 
 
 def route(record: dict) -> str:
-    # Order matters: DOHA scope is excluded before any per-source judgment.
-    if record.get("collection_id") == "doha_decisions":
-        return "doha_unsupported"
     if record.get("duplicate_of"):
         return "duplicate_skip"
     if record.get("source_exists") is False:
@@ -47,6 +43,7 @@ def census(library: Path) -> dict:
                 "official_url": next((record[f] for f in URL_FIELDS if record.get(f)), None),
                 # Lets acquisition report whether the official source changed since capture.
                 "recorded_sha256": record.get("source_sha256"),
+                "requires_case_metadata_review": record.get("collection_id") == "doha_decisions",
             })
     pointer = library / POINTER
     by_route = Counter(item["route"] for item in documents)
@@ -64,7 +61,7 @@ def census(library: Path) -> dict:
         "notes": [
             "Read-only. The library was not modified.",
             "retained_bytes_only records have no official origin on record; rebuilding them needs provenance review, not a guessed URL.",
-            "doha_unsupported records are excluded until portable DOHA reconstruction exists.",
+            "DOHA records require attributable case, era, outcome and guideline review before a recipe can build their dedicated indexes.",
         ],
         "documents": documents,
     }

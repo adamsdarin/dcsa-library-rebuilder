@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import sqlite3
 
+from .acquire import DEFAULT_SETTINGS
 from .build import MARKER, BuildRefused, build
 from .common import read_json, sha256_file, utc_now, write_json
 from .notice import MAINTENANCE_MODE, NOTICE
@@ -14,15 +15,20 @@ from .release_contract import STATE, approved_release
 
 
 def load_config(path: Path, base: Path) -> dict:
-    """Relative paths resolve against base (the repository root), never the caller's cwd."""
+    """Optional config; a fresh clone works without one.
+
+    Relative paths resolve against base (the repository root), never the caller's cwd.
+    `protected_libraries` is extra protection for libraries you already have; existing
+    libraries are refused regardless because destinations must be empty.
+    """
     path = Path(path)
-    if not path.is_file():
-        raise ValueError(f"Missing {path}; copy config/rebuilder.example.json and set explicit paths")
-    config = read_json(path)
+    config = read_json(path) if path.is_file() else {}
     protected = config.get("protected_libraries", [])
-    if not protected or any("<" in str(p) for p in protected):
-        raise ValueError("Config needs at least one real protected_libraries entry (the canonical library)")
+    if not isinstance(protected, list) or any("<" in str(p) for p in protected):
+        raise ValueError(f"{path}: protected_libraries must be a list of real paths (remove the template placeholder)")
     config["protected_libraries"] = [str((Path(base) / p).resolve()) for p in protected]
+    config["acquisition"] = {**DEFAULT_SETTINGS, **config.get("acquisition", {})}
+    config["config_source"] = str(path) if path.is_file() else "built-in defaults (no config file)"
     return config
 
 

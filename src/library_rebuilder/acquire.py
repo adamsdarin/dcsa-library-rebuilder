@@ -1,7 +1,7 @@
 """Independent acquisition: fetch official HTTPS sources into a run-owned quarantine.
 
 Writes Archivist intake packages directly, so a rebuild needs no Librarian checkout.
-It never guesses URLs, never reads the canonical library, and reports every gap.
+It never guesses URLs, never reads an existing library, and reports every gap.
 """
 from __future__ import annotations
 
@@ -21,6 +21,12 @@ from .common import read_json, sha256_file, utc_now, write_json
 PRODUCER = "dcsa-library-rebuilder"
 USER_AGENT = "dcsa-library-rebuilder/0.1 (official-source library reconstruction)"
 CHUNK = 1 << 20
+# Official-source hosts seen in DCSA Library provenance. Override in config/rebuilder.json.
+DEFAULT_SETTINGS = {
+    "allowed_domains": ["gov", "mil", "cdse.edu", "wbdg.org", "resources.sei.cmu.edu"],
+    "max_bytes": 250 * 2**20,
+    "delay_seconds": 1.0,
+}
 
 
 class Refused(Exception):

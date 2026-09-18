@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 from .common import read_json, sha256_file, write_json
 from .paths import inside
+from .doha import review_metadata
 
 RELEASE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 REVIEW_FIELDS = ("reviewed_by", "reviewed_utc", "identity", "provenance", "extraction", "parity", "taxonomy", "lifecycle")
@@ -42,7 +43,7 @@ def check_intake(plan_path: Path) -> list[str]:
         if not isinstance(document_id, str) or not document_id.strip():
             raise ValueError("Every intake item needs a document_id")
         if record.get("collection_id") == "doha_decisions":
-            raise ValueError(f"DOHA reconstruction is unsupported: {document_id}")
+            review_metadata(record, plan.get('doha_taxonomy'))
         missing = [k for k in REVIEW_FIELDS if not str(review.get(k, "")).strip()]
         if missing:
             raise ValueError(f"{document_id} lacks review evidence: {', '.join(missing)}")

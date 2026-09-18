@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "items": [
+    {
+      "package": "sources/<name written by acquire>.intake.json",
+      "robot_file": "<page text you extracted, UTF-8, form feed between pages>.txt",
+      "robot_sha256": "<SHA-256 of that text file>",
+      "record": {
+        "document_id": "<unique edition ID, e.g. cfr-32-117-2024>",
+        "collection_id": "<cfr | dfars | executive_orders | dodi | sead | icd | isl_current | nist | voi | cdse_pulse | cdse_resources | job_aids | cui | forms | industrial_security | ...>",
+        "domain": "<e.g. REGULATIONS>",
+        "authority_tier": 1,
+        "current_status": "<current | active | current_or_verify | historical | superseded | rescinded>",
+        "title": "<official title>",
+        "effective_date": "<YYYY-MM or YYYY-MM-DD, if known>",
+        "human_source_path": "HUMAN_READABLE_DIRECTORY/<FOLDER>/<Normalized Name>.pdf",
+        "robot_text_path": "ROBOT_READABLE_DIRECTORY/TEXT/<FOLDER>/<Normalized Name>.txt"
+      },
+      "review": {
+        "reviewed_by": "<person or agent>",
+        "reviewed_utc": "<ISO 8601 UTC timestamp>",
+        "identity": "<what establishes this is the document it claims to be>",
+        "provenance": "<official URL, redirects, and why the host is authoritative>",
+        "extraction": "<how the text was extracted; every page present; OCR quality if any>",
+        "parity": "<how the text was compared against the original>",
+        "taxonomy": "<why this collection, domain and name>",
+        "lifecycle": "<official evidence it is current, or why it is unresolved>"
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import shutil
 import sys
 
 from .acquire import acquire, targets_from
@@ -13,6 +14,29 @@ from .notice import MAINTENANCE_MODE, NOTICE, banner
 from .recipe import build_recipe
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+TEMPLATES = PROJECT_ROOT / "templates"
+
+
+def init_run(run: Path) -> dict:
+    """Lay out a run folder so a fresh clone can build without an existing library."""
+    run = Path(run).resolve()
+    if run.exists() and any(run.iterdir()):
+        raise ValueError(f"Run folder is not empty: {run}")
+    (run / "recipe" / "sources").mkdir(parents=True)
+    copies = {"urls.example.txt": run / "urls.txt",
+              "intake_plan.example.json": run / "recipe" / "intake_plan.template.json",
+              "golden_queries.example.json": run / "recipe" / "golden_queries.template.json"}
+    for name, target in copies.items():
+        shutil.copyfile(TEMPLATES / name, target)
+    return {"ok": True, "run": str(run), "next_steps": [
+        f"1. List official HTTPS source URLs in {run / 'urls.txt'}",
+        f"2. rebuilder.py acquire --urls {run / 'urls.txt'} --out {run / 'recipe' / 'sources'}",
+        "3. Extract page text for each source (UTF-8, form feed between pages) into the recipe folder",
+        "4. Fill intake_plan.template.json and golden_queries.template.json; save them as intake_plan.json and golden_queries.json",
+        f"5. rebuilder.py recipe --dir {run / 'recipe'} --release-id <id> --scope \"<what this library covers>\"",
+        f"6. rebuilder.py run --recipe {run / 'recipe' / 'recipe.json'} --destination <empty folder>",
+        "7. rebuilder.py verify --destination <that folder>",
+    ]}
 
 
 def _emit(result: dict) -> None:
@@ -24,6 +48,9 @@ def main(argv=None) -> int:
                                      "standalone (no Librarian, no Archivist). The result is NOT autonomously maintained.")
     parser.add_argument("--config", type=Path, default=PROJECT_ROOT / "config" / "rebuilder.json")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    i = commands.add_parser("init", help="Start a new run folder with templates (for building from scratch)")
+    i.add_argument("--run", type=Path, required=True)
 
     c = commands.add_parser("census", help="Read-only: classify every document by rebuild route")
     c.add_argument("--library", type=Path, required=True)
@@ -58,6 +85,9 @@ def main(argv=None) -> int:
     # Printed before any work, on stderr so stdout stays machine-readable JSON.
     print(banner(), file=sys.stderr)
     try:
+        if args.command == "init":
+            _emit(init_run(args.run))
+            return 0
         if args.command == "census":
             report = census(args.library)
             write_json(args.out, report)
@@ -82,6 +112,7 @@ def main(argv=None) -> int:
                 return 0 if report["complete"] else 1
             if args.command == "preflight":
                 result = preflight(config, args.destination)
+                result["notes"].append(f"Config: {config['config_source']}")
             else:
                 result = run(config, args.recipe, args.destination, PROJECT_ROOT / "runs")
     except (OSError, ValueError) as exc:
