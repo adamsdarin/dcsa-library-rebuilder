@@ -59,6 +59,24 @@ class CensusTests(Workspace):
         self.assertIsNone(report["source_release_id"])
 
 
+    def test_census_uses_only_byte_verified_published_provenance(self):
+        manifests = self.root / "lib/ROBOT_READABLE_DIRECTORY/MANIFESTS"
+        manifests.mkdir(parents=True)
+        rows = [{"document_id": "b", "collection_id": "cfr"}, {"document_id": "d", "collection_id": "cfr"}]
+        (manifests / "documents.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+        enriched = [
+            {"document_id": "b", "source_document_id": "b", "source_url": "https://example.gov/b.pdf",
+             "source_url_basis": "reacquired_bytes_identical", "human_artifact_sha256": "cd" * 32},
+            # a URL without the byte-match basis is not provenance
+            {"document_id": "d", "source_document_id": "d", "source_url": "https://example.gov/d.pdf"},
+        ]
+        (manifests / "DOCUMENTS_ENRICHED.jsonl").write_text("\n".join(json.dumps(r) for r in enriched) + "\n")
+        report = census(self.root / "lib")
+        self.assertEqual(report["provenance_recovered"], 1)
+        self.assertEqual(report["documents"][0]["route"], "reacquire_from_official_url")
+        self.assertEqual(report["documents"][0]["recorded_sha256"], "cd" * 32)
+        self.assertEqual(report["documents"][1]["route"], "retained_bytes_only")
+
 class RecipeTests(Workspace):
     def test_builds_hash_bound_recipe(self):
         directory = self.recipe_dir()

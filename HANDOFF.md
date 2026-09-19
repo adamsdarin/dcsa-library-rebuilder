@@ -1,8 +1,13 @@
 # HANDOFF — dcsa-library-rebuilder
 
-Last updated: 2026-09-16T19:47:19.937753+00:00 by Codex
+Last updated: 2026-09-18 by Claude
 
 ## Current State
+2026-09-18: census also reads official URLs the Custodian published after a byte-match
+provenance decision (DOCUMENTS_ENRICHED.jsonl, source_url_basis
+reacquired_bytes_identical) and reports provenance_recovered. Nothing else in the
+enriched manifest is trusted as provenance. 44 tests pass.
+
 Canonical standalone empty-destination Rebuilder. No runtime dependency on
 Librarian/Archivist. Mandatory unmaintained-snapshot notice remains on every
 command and generated library. Existing source acquisition/config/template edits
@@ -32,6 +37,8 @@ No new implementation decision is needed. A live rebuild still needs a confirmed
 destination and bounded acquisition scope; no live rebuild is claimed here.
 
 ## Log
+2026-09-18 Claude — Wired census to Librarian/Archivist byte-verified provenance, the
+route for the 749 retained-bytes-only records to become rebuildable from official URLs.
 2026-09-16 Codex — Closed directive-section and robot-navigation gaps; verified consumer section
 selection, isolated standalone execution, metadata tamper rejection and all 43 tests.
 2026-09-16 Codex — Added reviewed DOHA recipe/build support, publication integrity, census
