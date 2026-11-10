@@ -1,6 +1,5 @@
 """Standalone reviewed-case reconstruction through the actual publication gate."""
 from contextlib import closing
-from copy import deepcopy
 from pathlib import Path
 import sqlite3
 import sys

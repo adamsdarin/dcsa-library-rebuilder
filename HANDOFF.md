@@ -1,6 +1,6 @@
 # HANDOFF — dcsa-library-rebuilder
 
-Last updated: 2026-09-18 by Claude
+Last updated: 2026-11-09 by Claude
 
 ## Current State
 2026-09-18: census also reads official URLs the Custodian published after a byte-match
@@ -37,6 +37,9 @@ No new implementation decision is needed. A live rebuild still needs a confirmed
 destination and bounded acquisition scope; no live rebuild is claimed here.
 
 ## Log
+2026-11-09 Claude — Added GitHub Actions test workflow (Ubuntu and Windows, Python 3.12), minimal
+ruff config (E9, F) with a lint step, and monthly Dependabot for actions. Removed one unused
+test import. 44 tests pass; not pushed, so the workflow has not run on GitHub.
 2026-09-18 Claude — Wired census to Librarian/Archivist byte-verified provenance, the
 route for the 749 retained-bytes-only records to become rebuildable from official URLs.
 2026-09-16 Codex — Closed directive-section and robot-navigation gaps; verified consumer section
